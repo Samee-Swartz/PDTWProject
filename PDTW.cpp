@@ -172,75 +172,100 @@ DTWData DTWaFile(std::string dataFile, std::string queryFile) {
     return DTWData(bestMatchDistance, bestMatchTimeSeries, bestMatchIdx, bestMatchBlkSz);
 }
 
-//// both incoming files should be PAA'd already
-//DTWData detectOutliers(std::string dataFile) {
-//    std::ifstream data(getPAAFilename(dataFile).c_str());
-//    std::ifstream query(getPAAFilename(queryFile).c_str());
-//
-//    if (!data) {
-//        std::cout << "ERROR: ifstream failed on " << dataFile << ": " << strerror(errno) << std::endl;
-//        return DTWData();
-//    }
-//
-//    std::string dataTimePoints;
-//
-//    std::vector<double> dataVector;
-//    std::vector<double> queryVector;
-//    int curTimeSeries = 0;
-//    int bestMatchTimeSeries = 1;
-//    int bestMatchIdx = 1;
-//    int bestMatchBlkSz = 2;
-//    double bestMatchDistance = std::numeric_limits<double>::max();
-//
-//    // turn query into vector
-//    std::getline(query, queryData);
-//    std::size_t prev = 0, pos;
-//    while ((pos = queryData.find_first_of(" ,", prev)) != std::string::npos) {
-//        if (pos > prev)
-//            queryVector.push_back(stod(queryData.substr(prev, pos-prev)));
-//        prev = pos+1;
-//    }
-//    if (prev < queryData.length())
-//        queryVector.push_back(stod(queryData.substr(prev, std::string::npos)));
-//        
-//    while (dataTimePoints.empty() && data.good())
-//        std::getline(data, dataTimePoints);
-//    
-//    while (data.good()) {
-//        // get the next data timeseries
-//        curTimeSeries++;        
-//        // split the timeseries numbers on space or comma
-//        std::size_t prev = 0, pos;
-//        while ((pos = dataTimePoints.find_first_of(" ,", prev)) != std::string::npos) {
-//            if (pos > prev)
-//                dataVector.push_back(stod(dataTimePoints.substr(prev, pos-prev)));
-//            prev = pos+1;
+// both incoming files should be PAA'd already
+DTWData detectOutliers(std::string dataFile) {
+    std::ifstream data(getPAAFilename(dataFile).c_str());
+
+    if (!data) {
+        std::cout << "ERROR: ifstream failed on " << dataFile << ": " << strerror(errno) << std::endl;
+        return DTWData();
+    }
+
+    std::string dataTimePoints;
+    std::string queryData;
+    std::vector<double> dataVector;
+    std::vector<double> queryVector;
+    int dataPos;
+    int curTimeSeries = 0;
+    int worstMatchTimeSeries = 1;
+    int worstMatchIdx = 1;
+    int worstMatchBlkSz = 2;
+    double worstMatchDistance = 0;
+    
+    // turn "first" data time series into query vector
+    while (queryData.empty())
+        std::getline(data, queryData);
+    while (data.good()) {
+        curTimeSeries++;
+        // split time series into query vector
+        std::size_t prev = 0, pos;
+        while ((pos = queryData.find_first_of(" ,", prev)) != std::string::npos) {
+            if (pos > prev)
+                queryVector.push_back(stod(queryData.substr(prev, pos-prev)));
+            prev = pos+1;
+        }
+        if (prev < queryData.length())
+            queryVector.push_back(stod(queryData.substr(prev, std::string::npos)));
+
+        dataPos = data.tellg();
+               
+//        std::cout << "query:" << std::endl;
+//        for (int i=0; i < queryVector.size(); i++) {
+//            std::cout << queryVector[i] << " " << std::endl;
 //        }
-//        if (prev < dataTimePoints.length())
-//            dataVector.push_back(stod(dataTimePoints.substr(prev, std::string::npos)));
-//
-//        // run through all combinations from query
-//        for (int blkSz = 2; blkSz <= (int)queryVector.size(); blkSz++) {
-//            for (int startIdx = 0; startIdx+blkSz <= (int)queryVector.size(); startIdx++) {
-//                std::vector<double> subVec(queryVector.begin()+startIdx, queryVector.begin()+startIdx+blkSz);
-//                double newBest = std::min(simpleDTW(dataVector, subVec), bestMatchDistance);
-//		if (newBest != bestMatchDistance) {
-//                    bestMatchDistance = newBest;
-//                    bestMatchIdx = startIdx;
-//                    bestMatchBlkSz = blkSz;
-//                    bestMatchTimeSeries = curTimeSeries;
-//		}
+//        std::cout << std::endl << std::endl;
+
+        // get next data time series
+        while (dataTimePoints.empty() && data.good())
+            std::getline(data, dataTimePoints);
+        while (data.good()) {
+            // split time series into data vector
+            std::size_t prev = 0, pos;
+            while ((pos = dataTimePoints.find_first_of(" ,", prev)) != std::string::npos) {
+                if (pos > prev)
+                    dataVector.push_back(stod(dataTimePoints.substr(prev, pos-prev)));
+                prev = pos+1;
+            }
+            if (prev < dataTimePoints.length())
+                dataVector.push_back(stod(dataTimePoints.substr(prev, std::string::npos)));
+
+//            std::cout << "data:" << std::endl;
+//            for (int i=0; i < dataVector.size(); i++) {
+//                std::cout << dataVector[i] << " " << std::endl;
 //            }
-//        }
-//        
-//        // get the next data timeseries
-//        dataVector.clear();
-//        dataTimePoints = "";
-//        while (dataTimePoints.empty() && data.good())
-//            std::getline(data, dataTimePoints);
-//    }
-//    return DTWData(bestMatchDistance, bestMatchTimeSeries, bestMatchIdx, bestMatchBlkSz);
-//}
+//            std::cout << std::endl;
+            
+            // run through all combinations from query
+            for (int blkSz = 2; blkSz <= (int)queryVector.size(); blkSz++) {
+                for (int startIdx = 0; startIdx+blkSz <= (int)queryVector.size(); startIdx++) {
+                    std::vector<double> subVec(queryVector.begin()+startIdx, queryVector.begin()+startIdx+blkSz);
+                    double newWorst = std::max(simpleDTW(dataVector, subVec), worstMatchDistance);
+                    if (newWorst != worstMatchDistance) {
+                        worstMatchDistance = newWorst;
+                        worstMatchIdx = startIdx;
+                        worstMatchBlkSz = blkSz;
+                        worstMatchTimeSeries = curTimeSeries;
+                    }
+                }
+            }
+            
+            dataVector.clear();
+            dataTimePoints = "";
+            // turn next data time series into data vector
+            while (dataTimePoints.empty() && data.good())
+                std::getline(data, dataTimePoints);
+        }
+        data.clear();
+        data.seekg(dataPos, data.beg);
+        
+        queryData = "";
+        queryVector.clear();
+        // turn "first" data time series into query vector
+        while (queryData.empty() && data.good())
+            std::getline(data, queryData);
+    }
+    return DTWData(worstMatchDistance, worstMatchTimeSeries, worstMatchIdx, worstMatchBlkSz);
+}
 
 // how big will the incoming numbers be?
 double PAA(std::vector<double> inData) {
@@ -314,10 +339,10 @@ std::string PAAaFile(std::string inData, int N) {
 // CREATE NEW FLAG FOR OUTLIER.
 // OUTLIER WILL CHECK A FILE AGAINST ITSELF TO FIND THE MAX DTW DISTANCE
 int main(int argc, char** argv) {
-    if (argc != 4) {
+    if (argc != 4 && argc != 3) {
         usage();
         return -1;
-    }
+    }    
     
     clock_t start, stop;
 
@@ -343,10 +368,21 @@ int main(int argc, char** argv) {
         }
         std::cout << "DTW computed for data " << argv[2] << " and query " << argv[3];
         std::cout << ". Best distance found was: " << std::endl << d << std::endl;
-//        long s = (stop.tv_sec - start.tv_sec);
         int s = (stop - start)/ CLOCKS_PER_SEC;
         long t = ((stop - start) % CLOCKS_PER_SEC)/1000;
-//        unsigned long t = (((unsigned)stop.tv_usec) - ((unsigned)start.tv_usec))/1000.;
+        std::cout << "DTW took: " << s << " seconds and " << t << " milliseconds to compute" << std::endl;
+    } else if (!std::string(argv[1]).compare("-OUTLIER")) {
+        start = clock();
+        DTWData d = detectOutliers(argv[2]);
+        stop = clock();
+        if (d.empty()) {
+            std::cout << "detectOutliers failed" << std::endl;
+            return -1;
+        }
+        std::cout << "Outlier detection computed for data " << argv[2];
+        std::cout << ". Worst distance found was: " << std::endl << d << std::endl;
+        int s = (stop - start)/ CLOCKS_PER_SEC;
+        long t = ((stop - start) % CLOCKS_PER_SEC)/1000;
         std::cout << "DTW took: " << s << " seconds and " << t << " milliseconds to compute" << std::endl;
     } else {
         usage();
