@@ -14,10 +14,13 @@
 #include <sys/time.h>
 #include <ios>
 
+
+// FOR DTW TAKE BIN SIZE AND RUN PAA ON QUERY FILE
 void usage() {
     std::cout << "use this program in one of the following ways" << std::endl;
     std::cout << "./PDTW -PAA file blockSize" << std::endl;
     std::cout << "./PDTW -DTW dataFile queryFile" << std::endl;
+    std::cout << "./PDTW -OUTLIERS dataFile startLoc endLoc" << std::endl;
 }
 
 struct DTWData {
@@ -74,6 +77,16 @@ double distFunc(double x, double y) {
 
 //DTW calculation between two vectors. one is query and other Data sequence
 double simpleDTW(const std::vector<double>& t1, const std::vector<double>& t2) {
+    std::cout << "t1" << std::endl;
+    for (int k=0; k< t1.size(); k++) {
+        std::cout << t1[k] << " ";
+    }
+    std::cout << std::endl << "t2" << std::endl;
+    for (int l=0; l< t2.size(); l++ ) {
+        std::cout << t2[l] << " ";
+    }
+    std::cout << std::endl << std::endl;
+    
     int m = t1.size();
     int n = t2.size();
     // create cost matrix
@@ -94,13 +107,15 @@ double simpleDTW(const std::vector<double>& t1, const std::vector<double>& t2) {
             cost[i][j] = distFunc(t1[i],t2[j])+ std::min(cost[i-1][j],std::min(cost[i][j-1], cost[i-1][j-1]));
         }
     }
+    
+    std::cout << "dist: " << cost[m-1][n-1] << std::endl;
     return cost[m-1][n-1];
 }
 
 // both incoming files should be PAA'd already
 DTWData DTWaFile(std::string dataFile, std::string queryFile) {
-    std::ifstream data(getPAAFilename(dataFile).c_str());
-    std::ifstream query(getPAAFilename(queryFile).c_str());
+    std::ifstream data(getPAAFilename(queryFile).c_str());
+    std::ifstream query(getPAAFilename(dataFile).c_str());
 
     if (!data) {
             std::cout << "ERROR: ifstream failed on " << dataFile << ": " << strerror(errno) << std::endl;
@@ -173,7 +188,7 @@ DTWData DTWaFile(std::string dataFile, std::string queryFile) {
 }
 
 // both incoming files should be PAA'd already
-DTWData detectOutliers(std::string dataFile) {
+DTWData detectOutliers(std::string dataFile, int startLoc, int stopLoc) {
     std::ifstream data(getPAAFilename(dataFile).c_str());
 
     if (!data) {
@@ -207,13 +222,31 @@ DTWData detectOutliers(std::string dataFile) {
         if (prev < queryData.length())
             queryVector.push_back(stod(queryData.substr(prev, std::string::npos)));
 
+        
+        // run until N time points are grabbed OR
+        // the end of the time series is hit
+        for (int i=0; (i < stopLoc); i++ ) {
+            // get one time value
+            std::getline(data, queryData, ' ');
+            // check if we hit the end of the time series
+            // ex) "number1\nnumber2"
+            if (i >= startLoc) {
+                queryVector.push_back(stod(queryData));
+            }
+        }
+        
+        std::getline(data, queryData); // finish reading in the line. Try seek?
         dataPos = data.tellg();
+        
+        
                
-//        std::cout << "query:" << std::endl;
-//        for (int i=0; i < queryVector.size(); i++) {
-//            std::cout << queryVector[i] << " " << std::endl;
-//        }
-//        std::cout << std::endl << std::endl;
+        std::cout << "query:" << std::endl;
+        for (int i=0; i < queryVector.size(); i++) {
+            std::cout << queryVector[i] << " " << std::endl;
+        }
+        std::cout << std::endl << std::endl;
+        
+        return DTWData();
 
         // get next data time series
         while (dataTimePoints.empty() && data.good())
@@ -339,7 +372,7 @@ std::string PAAaFile(std::string inData, int N) {
 // CREATE NEW FLAG FOR OUTLIER.
 // OUTLIER WILL CHECK A FILE AGAINST ITSELF TO FIND THE MAX DTW DISTANCE
 int main(int argc, char** argv) {
-    if (argc != 4 && argc != 3) {
+    if (argc != 4 && argc != 5) {
         usage();
         return -1;
     }    
@@ -371,9 +404,9 @@ int main(int argc, char** argv) {
         int s = (stop - start)/ CLOCKS_PER_SEC;
         long t = ((stop - start) % CLOCKS_PER_SEC)/1000;
         std::cout << "DTW took: " << s << " seconds and " << t << " milliseconds to compute" << std::endl;
-    } else if (!std::string(argv[1]).compare("-OUTLIER")) {
+    } else if (!std::string(argv[1]).compare("-OUTLIERS")) {
         start = clock();
-        DTWData d = detectOutliers(argv[2]);
+        DTWData d = detectOutliers(argv[2], atoi(argv[3]), atoi(argv[4]));
         stop = clock();
         if (d.empty()) {
             std::cout << "detectOutliers failed" << std::endl;

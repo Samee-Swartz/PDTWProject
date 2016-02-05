@@ -1,6 +1,6 @@
-all: PDTW
+all: PDTW.exe
 
-PDTW: PDTW.o
+PDTW.exe: PDTW.o
 	g++ -std=c++11 -Wall -g -o PDTW PDTW.o
 
 PDTW.o: PDTW.cpp
