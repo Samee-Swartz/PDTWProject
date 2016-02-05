@@ -77,15 +77,15 @@ double distFunc(double x, double y) {
 
 //DTW calculation between two vectors. one is query and other Data sequence
 double simpleDTW(const std::vector<double>& t1, const std::vector<double>& t2) {
-    std::cout << "t1" << std::endl;
-    for (int k=0; k< t1.size(); k++) {
-        std::cout << t1[k] << " ";
-    }
-    std::cout << std::endl << "t2" << std::endl;
-    for (int l=0; l< t2.size(); l++ ) {
-        std::cout << t2[l] << " ";
-    }
-    std::cout << std::endl << std::endl;
+//    std::cout << "t1" << std::endl;
+//    for (int k=0; k< t1.size(); k++) {
+//        std::cout << t1[k] << " ";
+//    }
+//    std::cout << std::endl << "t2" << std::endl;
+//    for (int l=0; l< t2.size(); l++ ) {
+//        std::cout << t2[l] << " ";
+//    }
+//    std::cout << std::endl << std::endl;
     
     int m = t1.size();
     int n = t2.size();
@@ -108,7 +108,7 @@ double simpleDTW(const std::vector<double>& t1, const std::vector<double>& t2) {
         }
     }
     
-    std::cout << "dist: " << cost[m-1][n-1] << std::endl;
+//    std::cout << "dist: " << cost[m-1][n-1] << std::endl;
     return cost[m-1][n-1];
 }
 
