@@ -70,6 +70,20 @@ std::string getPAAFilename(std::string incoming) {
     return createPAAFilepath(incoming);
 }
 
+std::vector<double> timeSeriesToVector(std::string series) {
+    std::vector<double> vec;
+    std::size_t prev = 0, pos;
+    while ((pos = series.find_first_of(" ,", prev)) != std::string::npos) {
+        if (pos > prev)
+            vec.push_back(stod(series.substr(prev, pos-prev)));
+        prev = pos+1;
+    }
+    if (prev < series.length())
+        vec.push_back(stod(series.substr(prev, std::string::npos)));
+    
+    return vec;
+}
+
 //simple Euclidean distance between two points
 double distFunc(double x, double y) {
     return sqrt(pow((x - y), 2));
@@ -114,8 +128,8 @@ double simpleDTW(const std::vector<double>& t1, const std::vector<double>& t2) {
 
 // both incoming files should be PAA'd already
 DTWData DTWaFile(std::string dataFile, std::string queryFile) {
-    std::ifstream data(getPAAFilename(queryFile).c_str());
-    std::ifstream query(getPAAFilename(dataFile).c_str());
+    std::ifstream data(getPAAFilename(dataFile).c_str()); // bigger file
+    std::ifstream query(getPAAFilename(queryFile).c_str()); // smaller file
 
     if (!data) {
             std::cout << "ERROR: ifstream failed on " << dataFile << ": " << strerror(errno) << std::endl;
@@ -131,7 +145,7 @@ DTWData DTWaFile(std::string dataFile, std::string queryFile) {
 
     std::vector<double> dataVector;
     std::vector<double> queryVector;
-    int curTimeSeries = 0;
+    int curTimeSeries = -1;
     int bestMatchTimeSeries = 1;
     int bestMatchIdx = 1;
     int bestMatchBlkSz = 2;
@@ -165,10 +179,10 @@ DTWData DTWaFile(std::string dataFile, std::string queryFile) {
             dataVector.push_back(stod(dataTimePoints.substr(prev, std::string::npos)));
 
         // run through all combinations from query
-        for (int blkSz = 2; blkSz <= (int)queryVector.size(); blkSz++) {
-            for (int startIdx = 0; startIdx+blkSz <= (int)queryVector.size(); startIdx++) {
-                std::vector<double> subVec(queryVector.begin()+startIdx, queryVector.begin()+startIdx+blkSz);
-                double newBest = std::min(simpleDTW(dataVector, subVec), bestMatchDistance);
+        for (int blkSz = 2; blkSz <= (int)dataVector.size(); blkSz++) {
+            for (int startIdx = 0; startIdx+blkSz <= (int)dataVector.size(); startIdx++) {
+                std::vector<double> subVec(dataVector.begin()+startIdx, dataVector.begin()+startIdx+blkSz);
+                double newBest = std::min(simpleDTW(queryVector, subVec), bestMatchDistance);
 		if (newBest != bestMatchDistance) {
                     bestMatchDistance = newBest;
                     bestMatchIdx = startIdx;
@@ -201,103 +215,69 @@ DTWData detectOutliers(std::string dataFile, int startLoc, int stopLoc) {
     std::vector<double> dataVector;
     std::vector<double> queryVector;
     int dataPos;
-    int curTimeSeries = 0;
-    int worstMatchTimeSeries = 1;
-    int worstMatchIdx = 1;
-    int worstMatchBlkSz = 2;
-    double worstMatchDistance = 0;
+    int curQTimeSeries = -1;
+    int curDTimeSeries = 0;    
+    std::vector<double> diffs;
     
-    // turn "first" data time series into query vector
+    // get first time series
     while (queryData.empty())
         std::getline(data, queryData);
+    
     while (data.good()) {
-        curTimeSeries++;
-        // split time series into query vector
-        std::size_t prev = 0, pos;
-        while ((pos = queryData.find_first_of(" ,", prev)) != std::string::npos) {
-            if (pos > prev)
-                queryVector.push_back(stod(queryData.substr(prev, pos-prev)));
-            prev = pos+1;
-        }
-        if (prev < queryData.length())
-            queryVector.push_back(stod(queryData.substr(prev, std::string::npos)));
-
+        curQTimeSeries++; // check this...
+        if (curQTimeSeries == 0) // first one
+            diffs.push_back(0.0); // for each time series, add an entry
+        // turn time series into vector
+        queryVector = timeSeriesToVector(queryData);
         
-        // run until N time points are grabbed OR
-        // the end of the time series is hit
-        for (int i=0; (i < stopLoc); i++ ) {
-            // get one time value
-            std::getline(data, queryData, ' ');
-            // check if we hit the end of the time series
-            // ex) "number1\nnumber2"
-            if (i >= startLoc) {
-                queryVector.push_back(stod(queryData));
-            }
-        }
-        
-        std::getline(data, queryData); // finish reading in the line. Try seek?
+        // grab location in file
         dataPos = data.tellg();
-        
-        
-               
-        std::cout << "query:" << std::endl;
-        for (int i=0; i < queryVector.size(); i++) {
-            std::cout << queryVector[i] << " " << std::endl;
-        }
-        std::cout << std::endl << std::endl;
-        
-        return DTWData();
 
-        // get next data time series
+        // grab data time series
         while (dataTimePoints.empty() && data.good())
             std::getline(data, dataTimePoints);
+        
+        curDTimeSeries = curQTimeSeries;
         while (data.good()) {
-            // split time series into data vector
-            std::size_t prev = 0, pos;
-            while ((pos = dataTimePoints.find_first_of(" ,", prev)) != std::string::npos) {
-                if (pos > prev)
-                    dataVector.push_back(stod(dataTimePoints.substr(prev, pos-prev)));
-                prev = pos+1;
-            }
-            if (prev < dataTimePoints.length())
-                dataVector.push_back(stod(dataTimePoints.substr(prev, std::string::npos)));
+            curDTimeSeries++;
+            if (curQTimeSeries == 0)
+                diffs.push_back(0.0);
+            // turn time series into vector
+            dataVector = timeSeriesToVector(dataTimePoints);
+        
+            std::vector<double> subQVec(queryVector.begin()+startLoc, queryVector.begin()+stopLoc);
+            std::vector<double> subDVec(dataVector.begin()+startLoc, dataVector.begin()+stopLoc);
+            double newWorst = simpleDTW(subQVec, subDVec);
+            diffs[curQTimeSeries] += newWorst; // add new worst to 
+            diffs[curDTimeSeries] += newWorst;
 
-//            std::cout << "data:" << std::endl;
-//            for (int i=0; i < dataVector.size(); i++) {
-//                std::cout << dataVector[i] << " " << std::endl;
-//            }
-//            std::cout << std::endl;
-            
-            // run through all combinations from query
-            for (int blkSz = 2; blkSz <= (int)queryVector.size(); blkSz++) {
-                for (int startIdx = 0; startIdx+blkSz <= (int)queryVector.size(); startIdx++) {
-                    std::vector<double> subVec(queryVector.begin()+startIdx, queryVector.begin()+startIdx+blkSz);
-                    double newWorst = std::max(simpleDTW(dataVector, subVec), worstMatchDistance);
-                    if (newWorst != worstMatchDistance) {
-                        worstMatchDistance = newWorst;
-                        worstMatchIdx = startIdx;
-                        worstMatchBlkSz = blkSz;
-                        worstMatchTimeSeries = curTimeSeries;
-                    }
-                }
-            }
-            
             dataVector.clear();
             dataTimePoints = "";
-            // turn next data time series into data vector
+            // get next time series
             while (dataTimePoints.empty() && data.good())
-                std::getline(data, dataTimePoints);
+                std::getline(data, dataTimePoints);            
         }
+    
         data.clear();
         data.seekg(dataPos, data.beg);
         
         queryData = "";
+        dataTimePoints = "";
+        dataVector.clear();
         queryVector.clear();
         // turn "first" data time series into query vector
         while (queryData.empty() && data.good())
             std::getline(data, queryData);
     }
-    return DTWData(worstMatchDistance, worstMatchTimeSeries, worstMatchIdx, worstMatchBlkSz);
+    
+    double worst =0;
+    int loc = 0;
+    for (int k=0; k < (int)diffs.size(); k++) {
+        worst = std::max(diffs[k], worst);
+        loc = k;
+    }
+    
+    return DTWData(worst, loc, startLoc, stopLoc-startLoc);
 }
 
 // how big will the incoming numbers be?
