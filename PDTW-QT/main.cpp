@@ -81,6 +81,7 @@ std::string getPAAFilename(std::string incoming) {
 }
 
 std::vector<double> timeSeriesToVector(std::string series) {
+    series.erase(series.find_last_not_of(" \n\r\t")+1);
     std::vector<double> vec;
     std::size_t prev = 0, pos;
     while ((pos = series.find_first_of(" ,", prev)) != std::string::npos) {
@@ -89,7 +90,7 @@ std::vector<double> timeSeriesToVector(std::string series) {
         prev = pos+1;
     }
     if (prev < series.length())
-        vec.push_back(stod(series.substr(prev, std::string::npos)));
+        vec.push_back(stod(series.substr(prev)));
 
     return vec;
 }
