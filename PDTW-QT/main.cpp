@@ -217,7 +217,7 @@ DTWData DTWaFile(std::string dataFile, std::string queryFile) {
 
 // the incoming file should be PAA'd already
 DTWData detectOutliers(std::string dataFile, int length) {
-    std::ifstream dataStream(getPAAFilename(dataFile).c_str());
+    std::ifstream dataStream(dataFile.c_str());
 
     if (!dataStream) {
         std::cout << "ERROR: ifstream failed on " << dataFile << ": " << strerror(errno) << std::endl;
@@ -241,7 +241,7 @@ DTWData detectOutliers(std::string dataFile, int length) {
         std::getline(dataStream, queryData);
 
     // run through each time series as query
-    while (dataStream.good()) {
+    while (!queryData.empty()) {
         queryStart = 0;
         queryEnd = length;
         curQTimeSeries++;
@@ -263,7 +263,7 @@ DTWData detectOutliers(std::string dataFile, int length) {
                 std::getline(dataStream, dataTimePoints);
 
             // run through the rest of the time series
-            while (dataStream.good()) {
+            while (!dataTimePoints.empty()) {
                 // turn time series into vector
                 dataVector = timeSeriesToVector(dataTimePoints);
                 // reset the data start and end for the next query chunk
@@ -276,6 +276,9 @@ DTWData detectOutliers(std::string dataFile, int length) {
                     curDist += simpleDTW(subQVec, subDVec);
                     dataStart++;
                     dataEnd++;
+
+//                    std::cout << "subV: " << subQVec << std::endl;
+//                    std::cout << "subD: " << subDVec << std::endl;
                 }
                 dataVector.clear();
                 dataTimePoints = "";
