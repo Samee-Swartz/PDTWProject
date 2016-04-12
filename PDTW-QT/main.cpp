@@ -231,7 +231,7 @@ DTWData detectOutliers(std::string dataFile, int length) {
     std::vector<double> queryVector;
     int dataPos;
     int curQTimeSeries = -1;
-    double maxSum;
+    double maxSum = 0;
     int maxSeries;
     int maxOffset;
     int queryStart = 0, queryEnd = length;
